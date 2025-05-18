@@ -114,5 +114,6 @@ meson install -C _mesonbuild
 
 # 构建安装程序  `_mesonbuild/mytool-win-installer.exe`.
 meson compile mytool-gmo -C _mesonbuild
+sh build.sh
 #meson compile build-installer -C _mesonbuild
 ```
