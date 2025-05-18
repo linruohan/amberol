@@ -34,6 +34,7 @@ run_command(
 
 cargo_options = [ '--manifest-path', meson.project_source_root() / 'Cargo.toml' ]
 cargo_options += [ '--target-dir', meson.project_build_root() / 'src' ]
+cargo_options += [ '--features', 'windows-sys/Win32_Networking_WinSock']
 
 if get_option('profile') == 'default'
   cargo_options += [ '--release' ]
@@ -59,7 +60,8 @@ cargo_release = custom_target(
     cargo_env,
     cargo, 'build',
     cargo_options,
-    '&&',
-    'cp', 'src' / rust_target / meson.project_name(), '@OUTPUT@',
   ],
+)
+run_command(
+    'cp','src' / rust_target / meson.project_name(), '@OUTPUT@',
 )

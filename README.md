@@ -82,3 +82,37 @@ Copyright 2022  Emmanuele Bassi
 
 Amberol is released under the terms of the GNU General Public License, either
 version 3.0 or, at your option, any later version.
+
+## mybuild
+```bash
+pacman -S rsync
+pacman -S pkg-config
+pacman -S gcc
+pacman -S vim
+pacman -S mingw-w64-x86_64-gtk4 mingw-w64-x86_64-gettext mingw-w64-x86_64-libxml2 mingw-w64-x86_64-librsvg mingw-w64-x86_64-pkgconf w-w64-x86_64-gcc
+pacman -S mingw-w64-ucrt-x86_64-gtk4
+pacman -S mingw-w64-ucrt-x86_64-toolchain base-devel
+pacman -S mingw-w64-ucrt-x86_64-libadwaita
+pacman -S mingw-w64-x86_64-gtk4 mingw-w64-x86_64-gettext mingw-w64-x86_64-libxml2 mingw-w64-x86_64-librsvg mingw-w64-x86_64-pkgconf -w64-x86_64-gcc
+pacman -S mingw-w64-x86_64-libadwaita
+pacman -S mingw-w64-ucrt-x86_64-gstreamer
+pacman -S mingw-w64-x86_64-gstreamer
+pacman -S mingw-w64-x86_64-gst-libav
+pacman -S glib2-devel pkg-config       mingw-w64-x86_64-gstreamer mingw-w64-x86_64-gst-plugins-base       mingw-w64-x86_64-gst-plugins-good -w64-x86_64-gst-plugins-bad       mingw-w64-x86_64-gst-plugins-ugly mingw-w64-x86_64-gst-libav       mingw-w64-x86_64-gst-rtsp-server
+pacman -S desktop-file-utils
+pacman -S mingw-w64-x86_64-desktop-file-utils
+mv /mingw64/lib/libpthread.dll.a /mingw64/lib/libpthread.dll.a.bak
+meson setup --prefix=C:/software/msys2/mingw64 _mesonbuild
+meson compile -C _mesonbuild
+meson setup --prefix=C:/software/msys2/mingw64 _mesonbuild --reconfigure
+# 初始化
+meson setup --prefix=C:/software/msys2/mingw64 _mesonbuild
+# 编译
+meson compile -C _mesonbuild
+# install  `C:\msys64\mingw64\bin\mytool.exe`  非绿色安装包
+meson install -C _mesonbuild
+
+# 构建安装程序  `_mesonbuild/mytool-win-installer.exe`.
+meson compile mytool-gmo -C _mesonbuild
+#meson compile build-installer -C _mesonbuild
+```

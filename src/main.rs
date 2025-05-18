@@ -48,9 +48,11 @@ fn main() -> glib::ExitCode {
 
     debug!("Setting up pulseaudio environment");
     let app_id = APPLICATION_ID.trim_end_matches(".Devel");
-    env::set_var("PULSE_PROP_application.icon_name", app_id);
-    env::set_var("PULSE_PROP_application.metadata().name", "Amberol");
-    env::set_var("PULSE_PROP_media.role", "music");
+    unsafe {
+        env::set_var("PULSE_PROP_application.icon_name", app_id);
+        env::set_var("PULSE_PROP_application.metadata().name", "Amberol");
+        env::set_var("PULSE_PROP_media.role", "music");
+    }
 
     debug!("Loading resources");
     let resources = match env::var("MESON_DEVENV") {

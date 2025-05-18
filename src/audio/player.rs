@@ -161,16 +161,34 @@ impl AudioPlayer {
     }
 
     fn setup_channel(self: Rc<Self>) {
-        let receiver = self.receiver.borrow_mut().take().unwrap();
-
-        glib::MainContext::default().spawn_local(clone!(@strong self as this => async move {
-            use futures::prelude::*;
-
-            let mut receiver = std::pin::pin!(receiver);
-            while let Some(action) = receiver.next().await {
-                this.process_action(action);
+        // Safely take the receiver, handling the case where it's already taken
+        let receiver = match self.receiver.borrow_mut().take() {
+            Some(rx) => rx,
+            None => {
+                log::error!("Attempted to take receiver but it was already taken");
+                return;
             }
-        }));
+        };
+
+        // Create a weak reference to break potential reference cycles
+        let weak_self = Rc::downgrade(&self);
+
+        glib::MainContext::default().spawn_local(async move {
+            let mut receiver = std::pin::pin!(receiver);
+
+            while let Some(action) = futures::StreamExt::next(&mut receiver).await {
+                // Upgrade weak reference to strong reference if the object still exists
+                if let Some(this) = weak_self.upgrade() {
+                    this.process_action(action);
+                } else {
+                    log::debug!("Parent object dropped while processing channel messages");
+                    break;
+                }
+            }
+
+            log::debug!("Channel receiver closed");
+        });
+        
     }
 
     fn process_action(&self, action: PlaybackAction) -> glib::ControlFlow {

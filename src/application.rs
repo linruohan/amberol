@@ -1,15 +1,15 @@
 // SPDX-FileCopyrightText: 2022  Emmanuele Bassi
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{cell::RefCell, rc::Rc};
-
 use adw::subclass::prelude::*;
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 use ashpd::{desktop::background::Background, WindowIdentifier};
 use async_channel::Receiver;
+use gio::ApplicationHoldGuard;
 use glib::clone;
 use gtk::{gio, glib, prelude::*};
 use log::{debug, warn};
+use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     audio::AudioPlayer,
@@ -150,19 +150,35 @@ impl Application {
 
         let _dummy = self.imp().settings.boolean("background-play");
     }
-
     fn setup_channel(&self) {
-        let receiver = self.imp().receiver.borrow_mut().take().unwrap();
-        glib::MainContext::default().spawn_local(clone!(@strong self as this => async move {
-            use futures::prelude::*;
+        // Take ownership of the receiver safely
+        let receiver = match self.imp().receiver.borrow_mut().take() {
+            Some(rx) => rx,
+            None => {
+                log::error!("Receiver already taken");
+                return;
+            }
+        };
 
+        // Create a weak reference to avoid circular references
+        let weak_self = glib::WeakRef::new();
+        weak_self.set(Some(self));
+
+        glib::MainContext::default().spawn_local(async move {
+            use futures::stream::StreamExt;
             let mut receiver = std::pin::pin!(receiver);
 
             while let Some(action) = receiver.next().await {
-                this.process_action(action);
+                if let Some(this) = weak_self.upgrade() {
+                    this.process_action(action);
+                } else {
+                    log::warn!("Application dropped while processing channel messages");
+                    break;
+                }
             }
-        }));
+        });
     }
+   
 
     fn process_action(&self, action: ApplicationAction) -> glib::ControlFlow {
         match action {
