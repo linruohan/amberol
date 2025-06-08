@@ -74,7 +74,9 @@ impl CoverCache {
             for picture in tag.pictures() {
                 let cover_art = match picture.pic_type() {
                     lofty::picture::PictureType::Other => Some(glib::Bytes::from(picture.data())),
-                    lofty::picture::PictureType::BandLogo => Some(glib::Bytes::from(picture.data())),
+                    lofty::picture::PictureType::BandLogo => {
+                        Some(glib::Bytes::from(picture.data()))
+                    }
                     _ => None,
                 };
 
@@ -90,8 +92,21 @@ impl CoverCache {
         // caches out of the water, which will slow down loading the song into the
         // playlist model
         if let Some(p) = path {
-            let ext_covers = vec!["Cover.jpg", "Cover.png", "cover.jpg", "cover.png"];
+            let ext_cover_basename = vec!["Cover", "cover", "Folder", "folder"];
+            let ext_cover_ext = vec!["jpg", "png"];
 
+            let ext_covers = ext_cover_basename
+                .iter()
+                .map(|&b| {
+                    ext_cover_ext
+                        .iter()
+                        .map(move |&e| format!("{}.{}", &b, &e))
+                        .collect::<Vec<_>>()
+                })
+                .fold(vec![], |mut v, mut dat| {
+                    v.append(&mut dat);
+                    v
+                });
             for name in ext_covers {
                 let mut cover_file = PathBuf::from(p);
                 cover_file.push(name);
@@ -124,9 +139,9 @@ impl CoverCache {
 
         for item in tag.items() {
             match item.key() {
-                lofty::tag::ItemKey::AlbumTitle => album = get_text_value(item.value()),
-                lofty::tag::ItemKey::AlbumArtist => album_artist = get_text_value(item.value()),
-                lofty::tag::ItemKey::TrackArtist => track_artist = get_text_value(item.value()),
+                lofty::prelude::ItemKey::AlbumTitle => album = get_text_value(item.value()),
+                lofty::prelude::ItemKey::AlbumArtist => album_artist = get_text_value(item.value()),
+                lofty::prelude::ItemKey::TrackArtist => track_artist = get_text_value(item.value()),
                 _ => (),
             };
         }

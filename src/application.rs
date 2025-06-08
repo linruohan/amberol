@@ -1,15 +1,16 @@
 // SPDX-FileCopyrightText: 2022  Emmanuele Bassi
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use std::{cell::RefCell, rc::Rc};
+
+use adw::prelude::AdwDialogExt;
 use adw::subclass::prelude::*;
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 use ashpd::{desktop::background::Background, WindowIdentifier};
 use async_channel::Receiver;
-use gio::ApplicationHoldGuard;
 use glib::clone;
 use gtk::{gio, glib, prelude::*};
 use log::{debug, warn};
-use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     audio::AudioPlayer,
@@ -30,7 +31,7 @@ mod imp {
     pub struct Application {
         pub player: Rc<AudioPlayer>,
         pub receiver: RefCell<Option<Receiver<ApplicationAction>>>,
-        pub background_hold: RefCell<Option<ApplicationHoldGuard>>,
+        pub background_hold: RefCell<Option<gio::ApplicationHoldGuard>>,
         pub settings: gio::Settings,
     }
 
@@ -136,49 +137,41 @@ impl Application {
     fn setup_settings(&self) {
         self.imp().settings.connect_changed(
             Some("background-play"),
-            clone!(@weak self as this => move |settings, _| {
-                let background_play = settings.boolean("background-play");
-                debug!("GSettings:background-play: {background_play}");
-                if background_play {
-                    this.request_background();
-                } else {
-                    debug!("Dropping background hold");
-                    this.imp().background_hold.replace(None);
+            clone!(
+                #[weak(rename_to = this)]
+                self,
+                move |settings, _| {
+                    let background_play = settings.boolean("background-play");
+                    debug!("GSettings:background-play: {background_play}");
+                    if background_play {
+                        this.request_background();
+                    } else {
+                        debug!("Dropping background hold");
+                        this.imp().background_hold.replace(None);
+                    }
                 }
-            }),
+            ),
         );
 
         let _dummy = self.imp().settings.boolean("background-play");
     }
+
     fn setup_channel(&self) {
-        // Take ownership of the receiver safely
-        let receiver = match self.imp().receiver.borrow_mut().take() {
-            Some(rx) => rx,
-            None => {
-                log::error!("Receiver already taken");
-                return;
-            }
-        };
+        let receiver = self.imp().receiver.borrow_mut().take().unwrap();
+        glib::MainContext::default().spawn_local(clone!(
+            #[strong(rename_to = this)]
+            self,
+            async move {
+                use futures::prelude::*;
 
-        // Create a weak reference to avoid circular references
-        let weak_self = glib::WeakRef::new();
-        weak_self.set(Some(self));
+                let mut receiver = std::pin::pin!(receiver);
 
-        glib::MainContext::default().spawn_local(async move {
-            use futures::stream::StreamExt;
-            let mut receiver = std::pin::pin!(receiver);
-
-            while let Some(action) = receiver.next().await {
-                if let Some(this) = weak_self.upgrade() {
+                while let Some(action) = receiver.next().await {
                     this.process_action(action);
-                } else {
-                    log::warn!("Application dropped while processing channel messages");
-                    break;
                 }
             }
-        });
+        ));
     }
-   
 
     fn process_action(&self, action: ApplicationAction) -> glib::ControlFlow {
         match action {
@@ -236,8 +229,7 @@ impl Application {
 
     fn show_about(&self) {
         let window = self.active_window().unwrap();
-        let dialog = adw::AboutWindow::builder()
-            .transient_for(&window)
+        let dialog = adw::AboutDialog::builder()
             .application_icon(APPLICATION_ID)
             .application_name("Amberol")
             .developer_name("Emmanuele Bassi")
@@ -251,7 +243,7 @@ impl Application {
             .translator_credits(i18n("translator-credits"))
             .build();
 
-        dialog.present();
+        dialog.present(Some(&window));
     }
 
     #[cfg(any(target_os = "linux", target_os = "freebsd"))]
@@ -284,9 +276,11 @@ impl Application {
         let background_play = self.imp().settings.boolean("background-play");
         if background_play {
             let ctx = glib::MainContext::default();
-            ctx.spawn_local(clone!(@weak self as app => async move {
-                app.portal_request_background().await
-            }));
+            ctx.spawn_local(clone!(
+                #[weak(rename_to = app)]
+                self,
+                async move { app.portal_request_background().await }
+            ));
         }
     }
 

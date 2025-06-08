@@ -7,6 +7,7 @@ mod config;
 mod cover_picture;
 mod drag_overlay;
 mod i18n;
+mod marquee;
 mod playback_control;
 mod playlist_view;
 mod queue_row;
@@ -48,11 +49,9 @@ fn main() -> glib::ExitCode {
 
     debug!("Setting up pulseaudio environment");
     let app_id = APPLICATION_ID.trim_end_matches(".Devel");
-    unsafe {
-        env::set_var("PULSE_PROP_application.icon_name", app_id);
-        env::set_var("PULSE_PROP_application.metadata().name", "Amberol");
-        env::set_var("PULSE_PROP_media.role", "music");
-    }
+    env::set_var("PULSE_PROP_application.icon_name", app_id);
+    env::set_var("PULSE_PROP_application.metadata().name", "Amberol");
+    env::set_var("PULSE_PROP_media.role", "music");
 
     debug!("Loading resources");
     let resources = match env::var("MESON_DEVENV") {

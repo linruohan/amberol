@@ -17,6 +17,12 @@ conf.set_quoted('LOCALEDIR', get_option('prefix') / get_option('localedir'))
 conf.set_quoted('PKGDATADIR', pkgdatadir)
 conf.set_quoted('APPLICATION_ID', application_id)
 conf.set_quoted('PROFILE', get_option('profile'))
+app_name = 'amberol'
+if host_machine.system() == 'windows'
+    ui_output = app_name + '.exe'
+else
+    ui_output = app_name
+endif
 
 config_rs = configure_file(
   input: 'config.rs.in',
@@ -34,7 +40,6 @@ run_command(
 
 cargo_options = [ '--manifest-path', meson.project_source_root() / 'Cargo.toml' ]
 cargo_options += [ '--target-dir', meson.project_build_root() / 'src' ]
-cargo_options += [ '--features', 'windows-sys/Win32_Networking_WinSock']
 
 if get_option('profile') == 'default'
   cargo_options += [ '--release' ]
@@ -51,7 +56,7 @@ cargo_release = custom_target(
   'cargo-build',
   build_by_default: true,
   build_always_stale: true,
-  output: meson.project_name(),
+  output: ui_output,
   console: true,
   install: true,
   install_dir: get_option('bindir'),
@@ -63,5 +68,7 @@ cargo_release = custom_target(
   ],
 )
 run_command(
-    'cp','src' / rust_target / meson.project_name(), '@OUTPUT@',
+    'cp','src' / rust_target / ui_output, '@OUTPUT@',
+
 )
+

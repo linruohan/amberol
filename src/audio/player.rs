@@ -28,10 +28,10 @@ pub enum PlaybackAction {
     SkipPrevious,
     SkipNext,
 
-    UpdatePosition(u64),
+    UpdatePosition(u64, bool),
     VolumeChanged(f64),
     Repeat(RepeatMode),
-    Seek(u64),
+    Seek(i64),
     PlayNext,
 
     Raise,
@@ -161,34 +161,20 @@ impl AudioPlayer {
     }
 
     fn setup_channel(self: Rc<Self>) {
-        // Safely take the receiver, handling the case where it's already taken
-        let receiver = match self.receiver.borrow_mut().take() {
-            Some(rx) => rx,
-            None => {
-                log::error!("Attempted to take receiver but it was already taken");
-                return;
-            }
-        };
+        let receiver = self.receiver.borrow_mut().take().unwrap();
 
-        // Create a weak reference to break potential reference cycles
-        let weak_self = Rc::downgrade(&self);
+        glib::MainContext::default().spawn_local(clone!(
+            #[strong(rename_to = this)]
+            self,
+            async move {
+                use futures::prelude::*;
 
-        glib::MainContext::default().spawn_local(async move {
-            let mut receiver = std::pin::pin!(receiver);
-
-            while let Some(action) = futures::StreamExt::next(&mut receiver).await {
-                // Upgrade weak reference to strong reference if the object still exists
-                if let Some(this) = weak_self.upgrade() {
+                let mut receiver = std::pin::pin!(receiver);
+                while let Some(action) = receiver.next().await {
                     this.process_action(action);
-                } else {
-                    log::debug!("Parent object dropped while processing channel messages");
-                    break;
                 }
             }
-
-            log::debug!("Channel receiver closed");
-        });
-        
+        ));
     }
 
     fn process_action(&self, action: PlaybackAction) -> glib::ControlFlow {
@@ -198,12 +184,12 @@ impl AudioPlayer {
             PlaybackAction::Stop => self.set_playback_state(PlaybackState::Stopped),
             PlaybackAction::SkipPrevious => self.skip_previous(),
             PlaybackAction::SkipNext => self.skip_next(),
-            PlaybackAction::UpdatePosition(pos) => self.update_position(pos),
+            PlaybackAction::UpdatePosition(pos, notify) => self.update_position(pos, notify),
             PlaybackAction::VolumeChanged(vol) => self.update_volume(vol),
             PlaybackAction::PlayNext => self.play_next(),
             PlaybackAction::Raise => self.present(),
             PlaybackAction::Repeat(mode) => self.update_repeat_mode(mode),
-            PlaybackAction::Seek(pos) => self.seek_position_abs(pos),
+            PlaybackAction::Seek(offset) => self.seek_offset(offset),
             // _ => debug!("Received action {:?}", action),
         }
 
@@ -447,6 +433,15 @@ impl AudioPlayer {
         self.seek(10, SeekDirection::Forward);
     }
 
+    pub fn seek_offset(&self, offset: i64) {
+        let direction = if offset < 0 {
+            SeekDirection::Backwards
+        } else {
+            SeekDirection::Forward
+        };
+        self.seek(offset.unsigned_abs(), direction);
+    }
+
     pub fn seek_position_rel(&self, position: f64) {
         let duration = self.state.duration() as f64;
         let pos = (duration * position).clamp(0.0, duration);
@@ -474,11 +469,11 @@ impl AudioPlayer {
         self.state.set_current_song(song);
     }
 
-    fn update_position(&self, position: u64) {
+    fn update_position(&self, position: u64, notify: bool) {
         self.state.set_position(position);
 
         for c in &self.controllers {
-            c.set_position(position);
+            c.set_position(position, notify);
         }
     }
 

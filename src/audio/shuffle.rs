@@ -3,9 +3,9 @@
 
 use std::cell::RefCell;
 
+use glib::clone;
 use gtk::{gio, glib, prelude::*, subclass::prelude::*};
 use rand::prelude::*;
-use rand::rng;
 
 mod imp {
     use glib::{ParamSpec, ParamSpecObject, Value};
@@ -109,28 +109,22 @@ impl ShuffleListModel {
     }
 
     pub fn set_model(&self, model: Option<&gio::ListModel>) {
-        let old_model = self.imp().model.borrow_mut().take();
-
         if let Some(model) = model {
-            let weak_self = glib::WeakRef::new();
-            weak_self.set(Some(self));
-            let model_clone = model.clone();
-
             self.imp().model.replace(Some(model.clone()));
-            model.connect_items_changed(
-                move |model, position, removed, added| {
-                    if let Some(this) = weak_self.upgrade() {
-                        let imp = this.imp();
-                        if let Some(ref shuffle) = *imp.shuffle.borrow() {
-                            if let Some(shuffled_pos) = shuffle.get(position as usize) {
-                                this.items_changed(*shuffled_pos, removed, added);
-                                return;
-                            }
+            model.connect_items_changed(clone!(
+                #[strong(rename_to = this)]
+                self,
+                move |_, position, removed, added| {
+                    if let Some(ref shuffle) = *this.imp().shuffle.borrow() {
+                        if let Some(shuffled_pos) = shuffle.get(position as usize) {
+                            this.items_changed(*shuffled_pos, removed, added);
+                            return;
                         }
-                        this.items_changed(position, removed, added);
                     }
-                },
-            );
+
+                    this.items_changed(position, removed, added);
+                }
+            ));
         } else {
             self.imp().model.replace(None);
         }
@@ -145,7 +139,7 @@ impl ShuffleListModel {
     pub fn reshuffle(&self, anchor: u32) {
         if let Some(ref model) = *self.imp().model.borrow() {
             let n_songs = model.n_items();
-            let mut rng = rng();
+            let mut rng = rand::rng();
 
             let positions: Vec<u32> = if anchor == 0 {
                 let mut before: Vec<u32> = vec![0];
