@@ -69,6 +69,7 @@ cargo_release = custom_target(
 )
 run_command(
     'cp','src' / rust_target / ui_output, '@OUTPUT@',
+    'cp','src' / rust_target / ui_output, '../@OUTPUT@',
 
 )
 
