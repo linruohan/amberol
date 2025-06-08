@@ -1,3 +1,10 @@
+#![warn(missing_debug_implementations)]
+#![allow(clippy::single_match)]
+// Turns off console window on Windows, but not when building with dev profile.
+#![cfg_attr(
+    all(not(debug_assertions), target_os = "windows"),
+    windows_subsystem = "windows"
+)]
 // SPDX-FileCopyrightText: 2022  Emmanuele Bassi
 // SPDX-License-Identifier: GPL-3.0-or-later
 
